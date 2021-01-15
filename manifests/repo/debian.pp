@@ -1,52 +1,28 @@
-# Class: jenkins::repo::debian
-#
-class jenkins::repo::debian
-{
-  if $caller_module_name != $module_name {
-    fail("Use of private class ${name} by ${caller_module_name}")
+# @summary Set up the apt repo on Debian-based distros
+# @api private
+class jenkins::repo::debian (
+  String $gpg_key_id = '62A9756BFD780C377CF24BA8FCEF32E745F2C3D5',
+) {
+  assert_private()
+
+  include apt
+
+  if $jenkins::lts {
+    $location = "${jenkins::repo::base_url}/debian-stable"
+  } else {
+    $location = "${jenkins::repo::base_url}/debian"
   }
 
-  include ::stdlib
-  include ::apt
-
-  $pkg_host = 'https://pkg.jenkins.io'
-
-  ensure_packages(['apt-transport-https'])
-
-  if $::jenkins::lts  {
-    apt::source { 'jenkins':
-      location => "${pkg_host}/debian-stable",
-      release  => 'binary/',
-      repos    => '',
-      include  => {
-        'src' => false,
-      },
-      key      => {
-        'id'     => '150FDE3F7787E7D11EF4E12A9B7D32F2D50582E6',
-        'source' => "${pkg_host}/debian/jenkins-ci.org.key",
-      },
-      require  => Package['apt-transport-https'],
-      notify   => Exec['apt_update'],
-    }
+  apt::source { 'jenkins':
+    location => $location,
+    release  => 'binary/',
+    repos    => '',
+    include  => {
+      'src' => false,
+    },
+    key      => {
+      'id'     => $gpg_key_id,
+      'source' => "${location}/${jenkins::repo::gpg_key_filename}",
+    },
   }
-  else {
-    apt::source { 'jenkins':
-      location => "${pkg_host}/debian",
-      release  => 'binary/',
-      repos    => '',
-      include  => {
-        'src' => false,
-      },
-      key      => {
-        'id'     => '150FDE3F7787E7D11EF4E12A9B7D32F2D50582E6',
-        'source' => "${pkg_host}/debian/jenkins-ci.org.key",
-      },
-      require  => Package['apt-transport-https'],
-      notify   => Exec['apt_update'],
-    }
-  }
-
-  anchor { 'jenkins::repo::debian::begin': }
-    -> Apt::Source['jenkins']
-    -> anchor { 'jenkins::repo::debian::end': }
 }

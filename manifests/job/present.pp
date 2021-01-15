@@ -1,23 +1,20 @@
-# Creates or updates a jenkins build job
-# This define should be considered private.
+# @summary Creates or updates a jenkins build job
+# @api private
 #
 # @param config The content of the jenkins job config file
 # @param config_file Jenkins job config file (file on disk)
 # @param jobname The name of the jenkins job
-# @param enabled Deprecated parameter (will have no effect if set)
 # @param replace Whether or not to replace the job if it already exists.
 #
-define jenkins::job::present(
+define jenkins::job::present (
   Optional[String] $config      = undef,
   Optional[String] $config_file = undef,
   String $jobname               = $title,
-  Any $enabled                  = undef,
   String $difftool              = '/usr/bin/diff -b -q',
   Boolean $replace              = true,
-){
-
-  include ::jenkins::cli
-  include ::jenkins::cli::reload
+) {
+  include jenkins::cli
+  include jenkins::cli::reload
 
   if $config_file and $config {
     fail('You cannot set both $config_file AND $config param, only one is required')
@@ -58,15 +55,16 @@ define jenkins::job::present(
     file { $tmp_config_path:
       content => $d,
       require => Exec['jenkins-cli'],
+      before  => Exec["jenkins create-job ${jobname}"],
     }
   }
 
-  $job_dir            = "${::jenkins::job_dir}/${jobname}"
+  $job_dir            = "${jenkins::job_dir}/${jobname}"
   $config_path        = "${job_dir}/config.xml"
 
   # Bring variables from Class['::jenkins'] into local scope.
-  $cli_tries          = $::jenkins::cli_tries
-  $cli_try_sleep   = $::jenkins::cli_try_sleep
+  $cli_tries          = $jenkins::cli_tries
+  $cli_try_sleep   = $jenkins::cli_try_sleep
 
   Exec {
     logoutput   => false,
@@ -81,7 +79,6 @@ define jenkins::job::present(
   exec { "jenkins create-job ${jobname}":
     command => "${cat_config} | ${create_job}",
     creates => [$config_path, "${job_dir}/builds"],
-    require => File[$tmp_config_path],
   }
 
   if $replace {
@@ -91,13 +88,7 @@ define jenkins::job::present(
       command => "${cat_config} | ${update_job}",
       onlyif  => "test -e ${config_path}",
       unless  => "${difftool} ${config_path} ${tmp_config_path}",
-      require => File[$tmp_config_path],
       notify  => Exec['reload-jenkins'],
     }
-  }
-
-  # Deprecation warning if $enabled is set
-  if $enabled != undef {
-    warning("You set \$enabled to ${enabled}, this parameter is now deprecated, nothing will change whatever is its value")
   }
 }

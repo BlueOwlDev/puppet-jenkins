@@ -1,6 +1,5 @@
-# Class: jenkins::params
-#
-#
+# @summary Default parameters
+# @api private
 class jenkins::params {
   $version               = 'installed'
   $lts                   = true
@@ -32,7 +31,7 @@ class jenkins::params {
   ]
   $purge_plugins = false
 
-  case $::osfamily {
+  case $facts['os']['family'] {
     'Debian': {
       $repo                 = true
       $libdir               = '/usr/share/jenkins'
@@ -62,7 +61,7 @@ class jenkins::params {
       # it is part of the public interface to ::jenkins; it needs to be
       # maintained until at least a major version bump.  It has been somewhat
       # repurposed as a flag for specific systemd support.
-      if $::systemd {
+      if $facts['systemd'] {
         $service_provider = 'systemd'
       } else {
         $service_provider = undef

@@ -45,44 +45,40 @@ define jenkins::augeas (
   Boolean $restart                                 = false,
   Boolean $show_diff                               = true,
 ) {
-  include ::jenkins
-  include ::jenkins::cli
-
+  include jenkins
+  include jenkins::cli
 
   case $plugin {
     true: {
-      jenkins::plugin {$name:
-        version       => $plugin_version,
-        manage_config => false,
-        before        => Augeas["jenkins::augeas: ${name}"],
+      jenkins::plugin { $name:
+        version => $plugin_version,
+        before  => Augeas["jenkins::augeas: ${name}"],
       }
     }
     false: {
       # do nothing
     }
     default: {
-      jenkins::plugin {$plugin:
-        version       => $plugin_version,
-        manage_config => false,
-        before        => Augeas["jenkins::augeas: ${name}"],
+      jenkins::plugin { $plugin:
+        version => $plugin_version,
+        before  => Augeas["jenkins::augeas: ${name}"],
       }
     }
   }
 
   if $restart {
-      $notify_exec = 'safe-restart-jenkins'
+    $notify_exec = 'safe-restart-jenkins'
   } else {
-      $notify_exec = 'reload-jenkins'
+    $notify_exec = 'reload-jenkins'
   }
 
-  augeas {"jenkins::augeas: ${name}":
-    incl      => "${::jenkins::localstatedir}/${config_filename}",
+  augeas { "jenkins::augeas: ${name}":
+    incl      => "${jenkins::localstatedir}/${config_filename}",
     lens      => 'Xml.lns',
-    context   => regsubst("/files${::jenkins::localstatedir}/${config_filename}/${context}", '\/{2,}', '/', 'G'),
+    context   => regsubst("/files${jenkins::localstatedir}/${config_filename}/${context}", '\/{2,}', '/', 'G'),
     notify    => Exec[$notify_exec],
     onlyif    => $onlyif,
     changes   => $changes,
     show_diff => $show_diff,
   }
-
 }

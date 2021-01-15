@@ -145,7 +145,6 @@ class jenkins::slave (
   Boolean $delete_existing_clients        = false,
   Any $java_cmd                           = '/usr/bin/java',
 ) inherits jenkins::params {
-
   if versioncmp($version, '3.0') < 0 {
     $client_jar = "swarm-client-${version}-jar-with-dependencies.jar"
   } else {
@@ -198,17 +197,17 @@ class jenkins::slave (
     default => regsubst($tool_locations, ':', '=', 'G'),
   }
 
-  if $install_java and ($::osfamily != 'Darwin') {
+  if $install_java and ($facts['os']['family'] != 'Darwin') {
     # Currently the puppetlabs/java module doesn't support installing Java on
     # Darwin
-    include ::java
+    include java
     Class['java'] -> Service['jenkins-slave']
   }
 
   # customizations based on the OS family
-  case $::osfamily {
+  case $facts['os']['family'] {
     'Debian': {
-      $defaults_location = $::jenkins::params::sysconfdir
+      $defaults_location = $jenkins::params::sysconfdir
 
       ensure_packages(['daemon'])
       Package['daemon'] -> Service['jenkins-slave']
@@ -217,7 +216,7 @@ class jenkins::slave (
       $defaults_location = $slave_home
     }
     default: {
-      $defaults_location = $::jenkins::params::sysconfdir
+      $defaults_location = $jenkins::params::sysconfdir
     }
   }
 
@@ -229,7 +228,7 @@ class jenkins::slave (
       $manage_user_home = true
       $sysv_init        = '/etc/init.d/jenkins-slave'
 
-      if $::systemd {
+      if $facts['systemd'] {
         jenkins::systemd { 'jenkins-slave':
           user   => $slave_user,
           libdir => $slave_home,
@@ -247,7 +246,7 @@ class jenkins::slave (
           mode    => '0755',
           owner   => 'root',
           group   => 'root',
-          content => template("${module_name}/${service_name}.${::osfamily}.erb"),
+          content => template("${module_name}/${service_name}.${facts['os']['family']}.erb"),
           notify  => Service[$service_name],
         }
       }
@@ -291,7 +290,7 @@ class jenkins::slave (
         }
       }
     }
-    default: { }
+    default: {}
   }
 
   #a Add jenkins slave user if necessary.
@@ -338,6 +337,6 @@ class jenkins::slave (
 
   if $manage_slave_user and $manage_client_jar {
     User['jenkins-slave_user']
-      -> Archive['get_swarm_client']
+    -> Archive['get_swarm_client']
   }
 }

@@ -175,12 +175,6 @@
 #   * CLI installation (both implicit and explicit) requires the ``unzip``
 #   command
 #
-# @param cli_remoting_free
-#   Weather to use the new Jenkins CLI introduced in Jenkins 2.54 and Jenkins
-#   2.46.2 LTS and later (see https://issues.jenkins-ci.org/browse/JENKINS-41745)
-#   Can be true, false or undef. When undef, then heuristics will be used based
-#   on $repo, $lts and $version.
-#
 # @param cli_ssh_keyfile
 #   Provides the location of an ssh private key file to make authenticated
 #   connections to the Jenkins CLI.
@@ -293,7 +287,7 @@
 #       version: '2.16.0'
 #     # /support-core deps
 #
-class jenkins(
+class jenkins (
   String $version                                 = $jenkins::params::version,
   Boolean $lts                                    = $jenkins::params::lts,
   Boolean $repo                                   = $jenkins::params::repo,
@@ -320,7 +314,6 @@ class jenkins(
   Optional[String] $cli_username                  = undef,
   Optional[String] $cli_password                  = undef,
   Optional[String] $cli_password_file             = undef,
-  Optional[Boolean] $cli_remoting_free            = undef,
   Integer $cli_tries                              = $jenkins::params::cli_tries,
   Integer $cli_try_sleep                          = $jenkins::params::cli_try_sleep,
   Integer $port                                   = $jenkins::params::port,
@@ -328,91 +321,36 @@ class jenkins(
   Stdlib::Absolutepath $sysconfdir                = $jenkins::params::sysconfdir,
   Boolean $manage_datadirs                        = $jenkins::params::manage_datadirs,
   Boolean $manage_home_dir                        = $jenkins::params::manage_home_dir,
-  Stdlib::Absolutepath $localstatedir             = $::jenkins::params::localstatedir,
+  Stdlib::Absolutepath $localstatedir             = $jenkins::params::localstatedir,
   Optional[Integer] $executors                    = undef,
   Optional[Integer] $slaveagentport               = undef,
-  Boolean $manage_user                            = $::jenkins::params::manage_user,
-  String $user                                    = $::jenkins::params::user,
-  Boolean $manage_group                           = $::jenkins::params::manage_group,
-  String $group                                   = $::jenkins::params::group,
-  Array $default_plugins                          = $::jenkins::params::default_plugins,
-  String $default_plugins_host                    = $::jenkins::params::default_plugins_host,
-  Boolean $purge_plugins                          = $::jenkins::params::purge_plugins,
+  Boolean $manage_user                            = $jenkins::params::manage_user,
+  String $user                                    = $jenkins::params::user,
+  Boolean $manage_group                           = $jenkins::params::manage_group,
+  String $group                                   = $jenkins::params::group,
+  Array $default_plugins                          = $jenkins::params::default_plugins,
+  String $default_plugins_host                    = $jenkins::params::default_plugins_host,
+  Boolean $purge_plugins                          = $jenkins::params::purge_plugins,
 ) inherits jenkins::params {
-
   if $purge_plugins and ! $manage_datadirs {
     warning('jenkins::purge_plugins has no effect unless jenkins::manage_datadirs is true')
-  }
-
-  ## determine if we must use the new CLI
-  if $cli_remoting_free == undef {
-    notice("INFO: Using the automatic detection of new cli mode (See https://issues.jenkins-ci.org/browse/JENKINS-41745), use \$::jenkins::cli_remoting_free=(true|false) to enable or disable explicitly")
-    # Heuristics (default)
-    # We try to "guess" if a new CLI version of jenkins is
-    # in use. If we can be sure, we enable new CLI mode automatically.
-    # If not, we keep the old way and print a hint about
-    # the explicit mode (this is true for custom repo setups,
-    # that do not mirror the Jenkins repo, but release jenkins
-    # versions based on repo stages and not pinning in puppet)
-    if $repo {
-      if $lts {
-        # we use a LTS version, so new cli is included in 2.46.2
-        if $version == 'latest' {
-          $_use_new_cli = true
-        } elsif $version == 'installed' {
-          $_use_new_cli = false
-        } elsif $version =~ /\d+\.\d+/ and versioncmp($version,'2.46.2') >= 0 {
-          $_use_new_cli = true
-        } else {
-          $_use_new_cli = false
-        }
-      } else {
-        # we use a regular version, so new cli is included in 2.54
-        if $version == 'latest' {
-          $_use_new_cli = true
-        } elsif $version == 'installed' {
-          $_use_new_cli = false
-        } elsif $version =~ /\d+\.\d+/ and versioncmp($version,'2.54') >= 0 {
-          $_use_new_cli = true
-        } else {
-          $_use_new_cli = false
-        }
-      }
-    } else {
-      # Repo not managed, so we do not know if it is a LTS or regular version
-      if $version =~ /\d+\.\d+/ and versioncmp($version,'2.54') >= 0 {
-        $_use_new_cli = true
-      } else {
-        $_use_new_cli = false
-      }
-    }
-  } else {
-    $_use_new_cli = str2bool($cli_remoting_free)
   }
 
   # Construct the cli auth argument used in cli and cli_helper
   if $cli_ssh_keyfile {
     # SSH key auth
-    if $_use_new_cli {
-      if empty($cli_username) {
-        fail('ERROR: Latest remoting free CLI (see https://issues.jenkins-ci.org/browse/JENKINS-41745) needs username for SSH Access (\$::jenkins::cli_username)')
-      }
-      $_cli_auth_arg = "-i '${cli_ssh_keyfile}' -ssh -user '${cli_username}'"
-    } else {
-      $_cli_auth_arg = "-i '${cli_ssh_keyfile}'"
+    if empty($cli_username) {
+      fail('ERROR: Latest remoting free CLI (see https://issues.jenkins-ci.org/browse/JENKINS-41745) needs username for SSH Access (\$::jenkins::cli_username)')
     }
+    $_cli_auth_arg = "-i '${cli_ssh_keyfile}' -ssh -user '${cli_username}'"
   } elsif !empty($cli_username) {
     # Username / Password auth (needed for AD and other Auth Realms)
-    if $_use_new_cli {
-      if !empty($cli_password) {
-        $_cli_auth_arg = "-auth '${cli_username}:${cli_password}'"
-      } elsif !empty($cli_password_file) {
-        $_cli_auth_arg = "-auth '@${cli_password_file}'"
-      } else {
-        fail('ERROR: Need cli_password or cli_password_file if cli_username is specified')
-      }
+    if !empty($cli_password) {
+      $_cli_auth_arg = "-auth '${cli_username}:${cli_password}'"
+    } elsif !empty($cli_password_file) {
+      $_cli_auth_arg = "-auth '@${cli_password_file}'"
     } else {
-      fail('ERROR: Due to https://issues.jenkins-ci.org/browse/JENKINS-12543 username and password mode are only supported for the non-remoting CLI mode (see https://issues.jenkins-ci.org/browse/JENKINS-41745)')
+      fail('ERROR: Need cli_password or cli_password_file if cli_username is specified')
     }
   } else {
     # default = no auth
@@ -422,11 +360,13 @@ class jenkins(
   $plugin_dir = "${localstatedir}/plugins"
   $job_dir = "${localstatedir}/jobs"
 
-  anchor {'jenkins::begin':}
-  anchor {'jenkins::end':}
+  # lint:ignore:anchor_resource
+  anchor { 'jenkins::begin': }
+  anchor { 'jenkins::end': }
+  # lint:endignore
 
   if $install_java {
-    include ::java
+    include java
   }
 
   if $direct_download {
@@ -436,37 +376,47 @@ class jenkins(
     $jenkins_package_class = 'jenkins::package'
     if $repo {
       $repo_ = true
-      include ::jenkins::repo
+      include jenkins::repo
     } else {
       $repo_ = false
     }
   }
   include $jenkins_package_class
 
-  include ::jenkins::config
-  include ::jenkins::plugins
-  include ::jenkins::jobs
-  include ::jenkins::users
-  include ::jenkins::proxy
+  include jenkins::user_setup
+  include jenkins::config
+  include jenkins::plugins
+  include jenkins::jobs
+  include jenkins::users
+  include jenkins::proxy
 
   if $manage_service {
-    include ::jenkins::service
-    if empty($default_plugins){
-      notice(sprintf('INFO: make sure you install the following plugins with your code using this module: %s',join($::jenkins::params::default_plugins,','))) # lint:ignore:140chars
+    include jenkins::service
+    if empty($default_plugins) {
+      notice(sprintf('INFO: make sure you install the following plugins with your code using this module: %s',join($jenkins::params::default_plugins,','))) # lint:ignore:140chars
+    }
+
+    if $service_provider == 'systemd' {
+      jenkins::systemd { 'jenkins':
+        user   => $user,
+        libdir => $libdir,
+      }
+
+      # jenkins::config manages the jenkins user resource, which is autorequired
+      # by the file resource for the run wrapper.
+      Class['jenkins::config']
+      -> Jenkins::Systemd['jenkins']
+      -> Anchor['jenkins::end']
     }
   }
 
-  if defined('::firewall') {
-    if $configure_firewall == undef {
-      fail('The firewall module is included in your manifests, please configure $configure_firewall in the jenkins module')
-    } elsif $configure_firewall {
-      include ::jenkins::firewall
-    }
+  if defined('::firewall') and $configure_firewall {
+    include jenkins::firewall
   }
 
   if $cli {
-    include ::jenkins::cli
-    include ::jenkins::cli_helper
+    include jenkins::cli
+    include jenkins::cli_helper
   }
 
   if $executors {
@@ -476,8 +426,8 @@ class jenkins(
     }
 
     Class['jenkins::cli']
-      -> Jenkins::Cli::Exec['set_num_executors']
-        -> Class['jenkins::jobs']
+    -> Jenkins::Cli::Exec['set_num_executors']
+    -> Class['jenkins::jobs']
   }
 
   if ($slaveagentport != undef) {
@@ -487,51 +437,39 @@ class jenkins(
     }
 
     Class['jenkins::cli']
-      -> Jenkins::Cli::Exec['set_slaveagent_port']
-        -> Class['jenkins::jobs']
+    -> Jenkins::Cli::Exec['set_slaveagent_port']
+    -> Class['jenkins::jobs']
   }
 
   if $manage_service {
     Anchor['jenkins::begin']
-      -> Class[$jenkins_package_class]
-        -> Class['jenkins::config']
-          -> Class['jenkins::plugins']
-            ~> Class['jenkins::service']
-              -> Class['jenkins::jobs']
-                -> Anchor['jenkins::end']
+    -> Class['jenkins::user_setup']
+    -> Class[$jenkins_package_class]
+    -> Class['jenkins::config']
+    -> Class['jenkins::plugins']
+    ~> Class['jenkins::service']
+    -> Class['jenkins::jobs']
+    -> Anchor['jenkins::end']
   }
 
   if $install_java {
     Anchor['jenkins::begin']
-      -> Class['java']
-        -> Class[$jenkins_package_class]
-          -> Anchor['jenkins::end']
+    -> Class['java']
+    -> Class[$jenkins_package_class]
+    -> Anchor['jenkins::end']
   }
 
   if $repo_ {
     Anchor['jenkins::begin']
-      -> Class['jenkins::repo']
-        -> Class['jenkins::package']
-          -> Anchor['jenkins::end']
+    -> Class['jenkins::repo']
+    -> Class['jenkins::package']
+    -> Anchor['jenkins::end']
   }
 
   if ($configure_firewall and $manage_service) {
     Class['jenkins::service']
-      -> Class['jenkins::firewall']
-        -> Anchor['jenkins::end']
-  }
-
-  if $service_provider == 'systemd' {
-    jenkins::systemd { 'jenkins':
-      user   => $user,
-      libdir => $libdir,
-    }
-
-    # jenkins::config manages the jenkins user resource, which is autorequired
-    # by the file resource for the run wrapper.
-    Class['jenkins::config']
-      -> Jenkins::Systemd['jenkins']
-        -> Anchor['jenkins::end']
+    -> Class['jenkins::firewall']
+    -> Anchor['jenkins::end']
   }
 }
 # vim: ts=2 et sw=2 autoindent

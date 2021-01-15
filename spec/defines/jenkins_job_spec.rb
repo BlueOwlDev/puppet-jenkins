@@ -7,17 +7,9 @@ describe 'jenkins::job' do
     'include jenkins'
   end
 
-  on_supported_os.each do |os, facts|
-    context "on #{os} " do
-      systemd_fact = case facts[:operatingsystemmajrelease]
-                     when '6'
-                       { systemd: false }
-                     else
-                       { systemd: true }
-                     end
-      let :facts do
-        facts.merge(systemd_fact)
-      end
+  on_supported_os.each do |os, os_facts|
+    context "on #{os}" do
+      let(:facts) { os_facts }
 
       describe 'relationships' do
         quotes = "<xml version='1.0' encoding='UTF-8'></xml>"
@@ -165,7 +157,7 @@ eos
         let(:thesource) { File.expand_path(File.dirname(__FILE__) + '/../fixtures/testjob.xml') }
         let(:params) { { ensure: 'present', source: thesource } }
 
-        it { is_expected.to raise_error(Puppet::Error, %r{(Must pass config|expects a value for parameter 'config')}) }
+        it { is_expected.to compile.and_raise_error(%r{(Must pass config|expects a value for parameter 'config')}) }
       end
 
       describe 'with templated config and blank regular config' do
@@ -193,7 +185,7 @@ eos
         let(:thetemplate) { File.expand_path(File.dirname(__FILE__) + '/../fixtures/testjob.xml') }
         let(:params) { { ensure: 'present', template: thetemplate } }
 
-        it { is_expected.to raise_error(Puppet::Error, %r{(Must pass config|expects a value for parameter 'config')}) }
+        it { is_expected.to compile.and_raise_error(%r{(Must pass config|expects a value for parameter 'config')}) }
       end
     end
   end

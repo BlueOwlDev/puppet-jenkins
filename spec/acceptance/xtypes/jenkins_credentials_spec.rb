@@ -33,8 +33,10 @@ describe 'jenkins_credentials' do
 
       context 'ConduitCredentialsImpl' do
         it 'works with no errors and idempotently' do
-          pending('puppet_helper.groovy implementation missing, see https://github.com/jenkinsci/puppet-jenkins/issues/753')
           pp = base_manifest + <<-EOS
+            jenkins::plugin { 'phabricator-plugin':
+            }
+
             jenkins_credentials { '002224bd-60cb-49f3-a314-d0f73f82233d':
               ensure      => 'present',
               description => 'phabricator-jenkins-conduit',
@@ -53,16 +55,19 @@ describe 'jenkins_credentials' do
         # trying to match anything other than the id this way might match other
         # credentials
         describe file('/var/lib/jenkins/credentials.xml') do
-          it {
-            pending('puppet_helper.groovy implementation missing, see https://github.com/jenkinsci/puppet-jenkins/issues/753')
-            is_expected.to contain '<id>002224bd-60cb-49f3-a314-d0f73f82233d</id>'
-          }
+          it { is_expected.to contain '<id>002224bd-60cb-49f3-a314-d0f73f82233d</id>' }
         end
       end
 
       context 'BasicSSHUserPrivateKey' do
         it 'works with no errors and idempotently' do
           pp = base_manifest + <<-EOS
+            # At least on EL7 version 1.0.4 is shipped and ssh-credentials
+            # needs >= 1.0.5. 1.0.8 is the latests at the time of writing.
+            jenkins::plugin { 'trilead-api':
+              version => '1.0.8',
+            }
+
             jenkins::plugin { 'ssh-credentials': }
 
             jenkins_credentials { 'a0469025-1202-4007-983d-0c62f230f1a7':
@@ -71,7 +76,7 @@ describe 'jenkins_credentials' do
               domain      => undef,
               impl        => 'BasicSSHUserPrivateKey',
               passphrase  => undef,
-              private_key => '-----BEGIN RSA PRIVATE KEY----- ...',
+              private_key => "-----BEGIN RSA PRIVATE KEY----- ...\n",
               scope       => 'SYSTEM',
               username    => 'robin',
             }
@@ -232,78 +237,6 @@ describe 'jenkins_credentials' do
         end
       end
 
-      context 'GoogleRobotPrivateKeyCredentials with json_key' do
-        it 'works with no errors and idempotently' do
-          pending('jenkins plugin tests are not consistently failing or succeeding: https://github.com/voxpupuli/puppet-jenkins/issues/839')
-          pp = base_manifest + <<-EOS
-            jenkins::plugin { [
-              'google-oauth-plugin',
-              'credentials',
-              'structs',
-              'oauth-credentials',
-            ]: }
-
-            jenkins_credentials { '587690b0-f793-44e6-bc46-889cce58fb71':
-              ensure   => 'present',
-              impl     => 'GoogleRobotPrivateKeyCredentials',
-              json_key => @(END)
-              {
-                "client_email": "random@developer.gserviceaccount.com",
-                "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-              }
-              | END,
-            }
-          EOS
-
-          apply(pp, catch_failures: true)
-          apply(pp, catch_changes: true)
-        end
-
-        describe file('/var/lib/jenkins/credentials.xml') do
-          # XXX need to properly compare the XML doc
-          # trying to match anything other than the id this way might match other
-          # credentails
-          it {
-            pending('jenkins plugin tests are not consistently failing or succeeding: https://github.com/voxpupuli/puppet-jenkins/issues/839')
-            is_expected.to contain '<projectId>587690b0-f793-44e6-bc46-889cce58fb71</projectId>'
-          }
-        end
-      end
-
-      context 'GoogleRobotPrivateKeyCredentials with email_address and p12_key' do
-        it 'works with no errors and idempotently' do
-          pending('jenkins plugin tests are not consistently failing or succeeding: https://github.com/voxpupuli/puppet-jenkins/issues/839')
-          pp = base_manifest + <<-EOS
-            jenkins::plugin { [
-              'google-oauth-plugin',
-              'credentials',
-              'structs',
-              'oauth-credentials',
-            ]: }
-
-            jenkins_credentials { '2f867d0d-e0c7-48a6-a355-1d4fd2ac6c22':
-              ensure        => 'present',
-              impl          => 'GoogleRobotPrivateKeyCredentials',
-              email_address => 'random@developer.gserviceaccount.com',
-              p12_key       => 'LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCg==',
-            }
-          EOS
-
-          apply(pp, catch_failures: true)
-          apply(pp, catch_changes: true)
-        end
-
-        describe file('/var/lib/jenkins/credentials.xml') do
-          # XXX need to properly compare the XML doc
-          # trying to match anything other than the id this way might match other
-          # credentails
-          it {
-            pending('jenkins plugin tests are not consistently failing or succeeding: https://github.com/voxpupuli/puppet-jenkins/issues/839')
-            is_expected.to contain '<projectId>2f867d0d-e0c7-48a6-a355-1d4fd2ac6c22</projectId>'
-          }
-        end
-      end
-
       context 'BrowserStackCredentials' do
         it 'works with no errors and idempotently' do
           pending('jenkins plugin tests are not consistently failing or succeeding: https://github.com/voxpupuli/puppet-jenkins/issues/839')
@@ -317,7 +250,7 @@ describe 'jenkins_credentials' do
               'browserstack-integration'
             ]: }
 
-            jenkins_credentials { '562fa23d-a441-4cab-997f-58df6e245813'
+            jenkins_credentials { '562fa23d-a441-4cab-997f-58df6e245813':
               ensure      => 'present',
               description => 'browserstack credentials',
               impl        => 'BrowserStackCredentials',
