@@ -509,6 +509,12 @@ class Actions {
           info['private_key'] = cred.privateKey
           info['passphrase'] = cred.passphrase?.plainText
           break
+        case 'com.uber.jenkins.phabricator.credentials.ConduitCredentialsImpl':
+          info['scope'] = CredentialsScope.GLOBAL
+          info['url'] = cred.getUrl()
+          info['description'] = cred.description
+          info['token'] = cred.getToken().plainText
+          break
         case 'com.dabsquared.gitlabjenkins.connection.GitLabApiTokenImpl':
           info['api_token'] = cred.apiToken.plainText
           info['description'] = cred.description
@@ -549,21 +555,6 @@ class Actions {
               break
             default:
               throw new UnsupportedCredentialsClass("unsupported " + keyStoreSource)
-          }
-          break
-        case 'com.google.jenkins.plugins.credentials.oauth.GoogleRobotPrivateKeyCredentials':
-          info['json_key'] = null
-          info['email_address'] = null
-          info['p12_key'] = null
-
-          def serviceAccountConfig = cred.getServiceAccountConfig()
-          if (serviceAccountConfig.getClass().getName() == 'com.google.jenkins.plugins.credentials.oauth.JsonServiceAccountConfig') {
-            info['json_key'] = Secret.fromString(new File(serviceAccountConfig.getJsonKeyFile()).getText('UTF-8')).getPlainText()
-          } else if (serviceAccountConfig.getClass().getName() == 'com.google.jenkins.plugins.credentials.oauth.P12ServiceAccountConfig') {
-            info['email_address'] = serviceAccountConfig.getEmailAddress()
-            info['p12_key'] = new File(serviceAccountConfig.getP12KeyFile()).getBytes().encodeBase64().toString()
-          } else {
-            throw new UnsupportedCredentialsClass("unsupported service account config " + serviceAccountConfig.getClass().getName())
           }
           break
         default:
@@ -668,6 +659,17 @@ class Actions {
           conf['description'],
         )
         break
+      case 'ConduitCredentialsImpl':
+        util.requirePlugin('phabricator-plugin')
+
+        cred = this.class.classLoader.loadClass('com.uber.jenkins.phabricator.credentials.ConduitCredentialsImpl').newInstance(
+          conf['id'],
+          conf['url'],
+          null,
+          conf['description'],
+          conf['token'],
+        )
+        break
       case 'GitLabApiTokenImpl':
         util.requirePlugin('gitlab-plugin')
 
@@ -676,43 +678,6 @@ class Actions {
           conf['id'],
           conf['description'],
           new Secret(conf['api_token']),
-        )
-        break
-      case 'GoogleRobotPrivateKeyCredentials':
-        util.requirePlugin('google-oauth-plugin')
-
-        def getFileItemFromString = { id, keyByteArray, classLoader ->
-          def fileItemFactory = classLoader.loadClass('org.apache.commons.fileupload.disk.DiskFileItemFactory').newInstance()
-          fileItemFactory.setSizeThreshold(keyByteArray.length)
-          def fileItem = fileItemFactory.createItem('tempfile', 'plain/text', false, id)
-          def outputStream = fileItem.getOutputStream()
-          outputStream.write(keyByteArray, 0 , keyByteArray.length)
-          outputStream.flush()
-          outputStream.close()
-
-          return fileItem
-        }
-
-        def serviceAccountConfig = null
-        if (conf['json_key'] != null) {
-          serviceAccountConfig = this.class.classLoader.loadClass('com.google.jenkins.plugins.credentials.oauth.JsonServiceAccountConfig').newInstance(
-            getFileItemFromString(conf['id'], conf['json_key'].getBytes(), this.class.classLoader),
-            null
-          )
-        } else if (conf['email_address'] != null && conf['p12_key'] != null) {
-          serviceAccountConfig = this.class.classLoader.loadClass('com.google.jenkins.plugins.credentials.oauth.P12ServiceAccountConfig').newInstance(
-            conf['email_address'],
-            getFileItemFromString(conf['id'], conf['p12_key'].decodeBase64(), this.class.classLoader),
-            null
-          )
-        } else {
-          throw new InvalidCredentialsId("Either 'json_key' or 'email_address' and 'p12_key' have to be defined")
-        }
-
-        cred = this.class.classLoader.loadClass('com.google.jenkins.plugins.credentials.oauth.GoogleRobotPrivateKeyCredentials').newInstance(
-          conf['id'],
-          serviceAccountConfig,
-          null
         )
         break
       default:

@@ -1,29 +1,20 @@
-# Define: jenkins::job::absent
+# @summary Removes a jenkins build job
+# @api private
 #
-#   Removes a jenkins build job
+# @param jobname
+#   the name of the jenkins job
 #
-#   This define should be considered private.
-#
-# Parameters:
-#
-#   config
-#     the content of the jenkins job config file (required)
-#
-#   jobname = $title
-#     the name of the jenkins job
-#
-define jenkins::job::absent(
+define jenkins::job::absent (
   String $jobname = $title,
-){
-
-  include ::jenkins::cli
+) {
+  include jenkins::cli
 
   if $jenkins::service_ensure == 'stopped' or $jenkins::service_ensure == false {
     fail('Management of Jenkins jobs requires \$jenkins::service_ensure to be set to \'running\'')
   }
 
   $tmp_config_path  = "/tmp/${jobname}-config.xml"
-  $job_dir          = "${::jenkins::job_dir}/${jobname}"
+  $job_dir          = "${jenkins::job_dir}/${jobname}"
   $config_path      = "${job_dir}/config.xml"
 
   # Temp file to use as stdin for Jenkins CLI executable
@@ -39,5 +30,4 @@ define jenkins::job::absent(
     onlyif    => "test -f \"${config_path}\"",
     require   => Exec['jenkins-cli'],
   }
-
 }

@@ -1,54 +1,34 @@
-require 'beaker-rspec'
-require 'beaker-puppet'
-require 'beaker/puppet_install_helper'
-require 'beaker/module_install_helper'
+require 'voxpupuli/acceptance/spec_helper_acceptance'
 
-run_puppet_install_helper unless ENV['BEAKER_provision'] == 'no'
-
-UNSUPPORTED_PLATFORMS = %w[Suse windows AIX Solaris].freeze
-
-RSpec.configure do |c|
-  # Readable test descriptions
-  c.formatter = :documentation
-
-  # Configure all nodes in nodeset
-  c.before :suite do
-    install_module_on(hosts)
-    install_module_dependencies_on(hosts)
-  end
-end
+configure_beaker
 
 shared_context 'jenkins' do
-  # rspec examples are not avaiable as variables to serverspec describe blocks
-  $libdir = case fact 'osfamily'
-            when 'RedHat'
-              '/usr/lib/jenkins'
-            when 'Debian'
-              '/usr/share/jenkins'
-            when 'Archlinux'
-              '/usr/share/java/jenkins/'
-            end
-  $sysconfdir = case fact 'osfamily'
-                when 'RedHat'
-                  '/etc/sysconfig'
-                when 'Debian'
-                  '/etc/default'
-                when 'Archlinux'
-                  '/etc/conf.d'
-                end
+  # rspec examples are not available as variables to serverspec describe blocks
+  LIBDIR = case fact 'osfamily'
+           when 'RedHat'
+             '/usr/lib/jenkins'
+           when 'Debian'
+             '/usr/share/jenkins'
+           when 'Archlinux'
+             '/usr/share/java/jenkins/'
+           end
+  SYSCONFDIR = case fact 'osfamily'
+               when 'RedHat'
+                 '/etc/sysconfig'
+               when 'Debian'
+                 '/etc/default'
+               when 'Archlinux'
+                 '/etc/conf.d'
+               end
 
-  let(:libdir) { $libdir }
+  let(:libdir) { LIBDIR }
 
   let(:base_manifest) do
     <<-EOS
-      class { '::jenkins':
-        cli_remoting_free => true,
-      }
-
-      class { '::jenkins::cli::config':
-        cli_jar           => '#{libdir}/jenkins-cli.jar',
-        puppet_helper     => '#{libdir}/puppet_helper.groovy',
-        cli_remoting_free => true,
+      include jenkins
+      class { 'jenkins::cli::config':
+        cli_jar       => '#{libdir}/jenkins-cli.jar',
+        puppet_helper => '#{libdir}/puppet_helper.groovy',
       }
     EOS
   end
@@ -61,12 +41,19 @@ def apply(pp, options = {})
 end
 
 # Run it twice and test for idempotency
+# And know value of custom fact during acceptance tests
 def apply2(pp)
   it 'works with no error' do
     apply_manifest(pp, catch_failures: true)
   end
+  it 'gets custom fact on first run' do
+    on(hosts, 'facter --json jenkins_plugins')
+  end
   it 'works idempotently' do
     apply_manifest(pp, catch_changes: true)
+  end
+  it 'gets custom fact on second run' do
+    on(hosts, 'facter --json jenkins_plugins')
   end
 end
 
@@ -79,8 +66,4 @@ end
 # https://tickets.puppetlabs.com/browse/BKR-1040
 # https://tickets.puppetlabs.com/browse/BKR-1041
 #
-$systemd = if shell('ps -p 1 -o comm=').stdout =~ %r{systemd}
-             true
-           else
-             false
-           end
+SYSTEMD = shell('ps -p 1 -o comm=').stdout =~ %r{systemd}
